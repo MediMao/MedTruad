@@ -80,6 +80,21 @@
   else if (HEX.test(saved)) use = saved;
   else if (saved !== '-') use = urlK;
   var key = use ? '&k=' + use : '';
+
+  /* B1.2: ?debug=1 → แถบเล็กมุมล่างบอกว่าได้ข้อความจากแอปไหม · จำรหัสไว้หรือยัง (ใช้ตรวจบน iPhone) */
+  var DBG = /[?&]debug=1(&|$)/.test(location.search);
+  var dbgBox = null, dbgLog = [];
+  function dbg(msg, ok, origin) {
+    if (!DBG) return;
+    if (!dbgBox) {
+      dbgBox = document.createElement('pre');
+      dbgBox.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 64px);z-index:9;margin:0;padding:8px 10px;border-radius:10px;background:rgba(21,24,38,.88);color:#fff;font:11px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;pointer-events:none';
+      document.body.appendChild(dbgBox);
+    }
+    if (msg) dbgLog.push((ok ? '✓ ' : '✗ ') + msg + (ok ? '' : '  (' + origin + ')'));
+    var t = lsGet('mt.token');
+    dbgBox.textContent = 'MedTruad debug · ใช้รหัส: ' + (use ? 'มี (' + use.slice(0, 6) + '…)' : 'ไม่มี') + ' · จำไว้: ' + (HEX.test(t) ? t.slice(0, 6) + '…' : (t || 'ไม่มี')) + '\n' + dbgLog.slice(-6).join('\n');
+  }
   var direct = EXEC + (use ? '?k=' + use : '');
 
   function ready() {
@@ -100,23 +115,42 @@
     slow.hidden = false;
     slow.textContent = 'ผู้ดูแลยังไม่ได้ใส่ URL ของแอปในไฟล์ index.html (ค่า EXEC)';
   } else {
-    /* ข้อความจากแอป (iframe ชั้นใน ของ Google) · รับเฉพาะจาก iframe ของเราเอง */
+    /* ข้อความจากแอป · Apps Script ซ้อนแอปไว้ 3 ชั้น (script.google.com → googleusercontent sandboxFrame → userHtmlFrame)
+       B1.2: ไล่ขึ้นทีละชั้นจนเจอ iframe ของเรา (อ่าน .parent ข้ามเว็บได้) + ต้องมาจากโดเมนของ Google หรือของ EXEC */
+    var execOrigin = '';
+    try { execOrigin = new URL(EXEC).origin; } catch (err) { execOrigin = ''; }
+    function fromApp(e) {
+      var o = String(e.origin || '');
+      if (!(o === execOrigin || /^https:\/\/[a-z0-9-]+(-[a-z0-9-]+)*\.googleusercontent\.com$/.test(o) || window.__MT_TEST)) return false;
+      var w = e.source;
+      for (var i = 0; i < 6 && w; i++) {
+        if (w === app.contentWindow) return true;
+        var p = null;
+        try { p = w.parent; } catch (err) { return false; }
+        if (!p || p === w) return false;
+        w = p;
+      }
+      return false;
+    }
     window.addEventListener('message', function (e) {
-      var s = e.source, mine = false;
-      try { mine = !!s && (s === app.contentWindow || s.parent === app.contentWindow); } catch (err) { mine = false; }
-      if (!mine || typeof e.data !== 'string') return;
+      if (typeof e.data !== 'string' || e.data.indexOf('medtruad:') !== 0) return;
+      var mine = fromApp(e);
+      dbg(e.data.replace(/^(medtruad:token:)[0-9a-f]{58}/, '$1…'), mine, e.origin);
+      if (!mine) return;
       if (e.data === 'medtruad:ready') ready();
       else if (e.data === 'medtruad:tabs:1') body.classList.add('tabs');
       else if (e.data === 'medtruad:tabs:0') body.classList.remove('tabs');
       else if (e.data.indexOf('medtruad:token:') === 0) {
         var t = e.data.slice(15);
         lsSet('mt.token', HEX.test(t) ? t : '-');
+        dbg('', true);
       }
     });
     /* แอปรุ่นเก่าที่ไม่ส่งสัญญาณ: ซ่อน splash หลังหน้าโหลด 4 วินาที */
     app.addEventListener('load', function () { setTimeout(ready, 4000); });
     setTimeout(function () { if (!done) showSlow('เปิดช้ากว่าปกติ · เน็ตอาจช้า หรือ Google ยังไม่ตอบ'); }, 20000);
     app.src = EXEC + '?w=1&o=' + encodeURIComponent(location.origin) + key;
+    if (DBG) window.addEventListener('load', function () { dbg('', true); });
   }
 </script>
 </body>
