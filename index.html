@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<!--
+  MedTruad · หน้าห่อบน GitHub Pages (B1)
+  หน้าที่: ชื่อ/ไอคอนบนหน้าจอโฮม · splash ระหว่าง Apps Script โหลด · ส่ง ?k= ต่อให้แอป
+  แก้ไฟล์นี้จุดเดียว: ค่า EXEC ด้านล่าง (URL /exec ของ deployment)
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MedTruad · เม็ดตรวจ</title>
+<meta name="description" content="ฝึก long case อายุรกรรมกับคนไข้ AI">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="origin">
+<meta name="theme-color" content="#F2F3F7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MedTruad">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root { --bg: #F2F3F7; --card: #FFFFFF; --ink: #151826; --ink-2: #565B70; --ink-3: #6B7086; --accent: #5653D4;
+    --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  body { font-family: 'IBM Plex Sans Thai', 'Sukhumvit Set', 'Thonburi', system-ui, sans-serif; color: var(--ink); -webkit-text-size-adjust: 100%; }
+  /* แอปใน iframe มองไม่เห็นขอบจอ (safe area = 0) → หน้าห่อเว้นขอบให้เอง
+     ขอบล่างเป็นสีขาวเมื่อแอปแสดงแถบแท็บ (แอปส่ง medtruad:tabs:1 มา) ไม่งั้นสีพื้น */
+  #app { position: fixed; left: 0; right: 0; top: var(--sat); bottom: var(--sab); width: 100%; height: calc(100% - var(--sat) - var(--sab)); border: 0; display: block; background: var(--bg); }
+  #pad { position: fixed; left: 0; right: 0; bottom: 0; height: var(--sab); background: var(--bg); }
+  body.tabs #pad { background: var(--card); }
+  #splash { position: fixed; inset: 0; z-index: 5; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: var(--sat) 24px var(--sab); transition: opacity .28s ease; }
+  body.ready #splash { opacity: 0; pointer-events: none; }
+  body.gone #splash { display: none; }
+  #splash svg { width: 76px; height: 76px; }
+  #splash .dot { transform-origin: 49px 32px; animation: breathe 1.6s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform: scale(.8); opacity: .7; } }
+  @media (prefers-reduced-motion: reduce) { #splash .dot { animation: none; } #splash { transition: none; } }
+  .credit { position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 22px); text-align: center; font-size: 12px; color: var(--ink-3); letter-spacing: .01em; }
+  .credit b { color: var(--ink-2); font-weight: 600; }
+  #slow { margin-top: 26px; max-width: 300px; text-align: center; font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+  #slow a { display: inline-block; margin: 10px 6px 0; padding: 9px 16px; border-radius: 999px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
+  #slow a.ghost { background: transparent; color: var(--accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="splash" role="status" aria-label="กำลังเปิด MedTruad">
+  <svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#151826" stroke-width="7" stroke-linecap="round"><path d="M11 15C24 15 26 32 35 32"/><path d="M11 49C24 49 26 32 35 32"/><path d="M11 32H35"/></g><circle class="dot" cx="49" cy="32" r="8.5" fill="#5653D4"/></svg>
+  <div id="slow" hidden></div>
+  <noscript><p style="margin-top:24px;color:#565B70">เปิด JavaScript ก่อนใช้แอป</p></noscript>
+  <div class="credit"><b>MediMao</b> by ChiepzzGolf</div>
+</div>
+<iframe id="app" title="MedTruad" allow="clipboard-write; clipboard-read" referrerpolicy="origin"></iframe>
+<div id="pad"></div>
+<script>
+  /* ใส่ URL /exec ของ deployment (Deploy → Manage deployments → Web app URL) */
+  var EXEC = 'PASTE_EXEC_URL_HERE';
+
+  var app = document.getElementById('app');
+  var slow = document.getElementById('slow');
+  var body = document.body;
+  var q = new URLSearchParams(location.search);
+  var k = q.get('k') || '';
+  var key = /^[0-9a-f]{64}$/.test(k) ? '&k=' + k : '';
+  var direct = EXEC + (key ? '?' + key.slice(1) : '');
+  var done = false;
+
+  function ready() {
+    if (done) return;
+    done = true;
+    body.classList.add('ready');
+    setTimeout(function () { body.classList.add('gone'); }, 320);
+  }
+  function showSlow(msg) {
+    slow.hidden = false;
+    slow.innerHTML = msg + '<br><a href="">โหลดใหม่</a><a class="ghost" target="_top"></a>';
+    var a = slow.querySelector('.ghost');
+    a.textContent = 'เปิดลิงก์ตรง';
+    a.href = direct;
+  }
+
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(EXEC) && !window.__MT_TEST) {
+    slow.hidden = false;
+    slow.textContent = 'ผู้ดูแลยังไม่ได้ใส่ URL ของแอปในไฟล์ index.html (ค่า EXEC)';
+  } else {
+    /* ข้อความจากแอป (iframe ชั้นใน ของ Google) · รับเฉพาะจาก iframe ของเราเอง */
+    window.addEventListener('message', function (e) {
+      var s = e.source, mine = false;
+      try { mine = !!s && (s === app.contentWindow || s.parent === app.contentWindow); } catch (err) { mine = false; }
+      if (!mine || typeof e.data !== 'string') return;
+      if (e.data === 'medtruad:ready') ready();
+      else if (e.data === 'medtruad:tabs:1') body.classList.add('tabs');
+      else if (e.data === 'medtruad:tabs:0') body.classList.remove('tabs');
+    });
+    /* แอปรุ่นเก่าที่ไม่ส่งสัญญาณ: ซ่อน splash หลังหน้าโหลด 4 วินาที */
+    app.addEventListener('load', function () { setTimeout(ready, 4000); });
+    setTimeout(function () { if (!done) showSlow('เปิดช้ากว่าปกติ · เน็ตอาจช้า หรือ Google ยังไม่ตอบ'); }, 20000);
+    app.src = EXEC + '?w=1' + key;
+  }
+</script>
+</body>
+</html>
