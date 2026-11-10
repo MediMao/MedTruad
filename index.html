@@ -64,11 +64,23 @@
   var app = document.getElementById('app');
   var slow = document.getElementById('slow');
   var body = document.body;
-  var q = new URLSearchParams(location.search);
-  var k = q.get('k') || '';
-  var key = /^[0-9a-f]{64}$/.test(k) ? '&k=' + k : '';
-  var direct = EXEC + (key ? '?' + key.slice(1) : '');
   var done = false;
+
+  /* B1.1 หน้าห่อเป็นคนจำรหัส: Safari ล้างที่เก็บของแอปใน iframe ทุกครั้งที่ปิด จึงต้องจำไว้ที่ github.io แทน
+     mt.token = รหัสล่าสุดที่แอปส่งมา ('-' = ออกจากระบบแล้ว) · mt.urlk = ?k= ล่าสุดที่เห็นใน URL
+     ลำดับ: ?k= ใหม่ใน URL (เพิ่งสร้างลิงก์) → รหัสที่จำไว้ → ?k= เดิมใน URL → ไม่มี (หน้าเข้าใช้) */
+  var HEX = /^[0-9a-f]{64}$/;
+  function lsGet(n) { try { return localStorage.getItem(n) || ''; } catch (e) { return ''; } }
+  function lsSet(n, v) { try { if (v) localStorage.setItem(n, v); else localStorage.removeItem(n); } catch (e) { /* โหมดส่วนตัว */ } }
+  var urlK = new URLSearchParams(location.search).get('k') || '';
+  if (!HEX.test(urlK)) urlK = '';
+  var saved = lsGet('mt.token');
+  var use = '';
+  if (urlK && urlK !== lsGet('mt.urlk')) { use = urlK; lsSet('mt.urlk', urlK); lsSet('mt.token', urlK); }
+  else if (HEX.test(saved)) use = saved;
+  else if (saved !== '-') use = urlK;
+  var key = use ? '&k=' + use : '';
+  var direct = EXEC + (use ? '?k=' + use : '');
 
   function ready() {
     if (done) return;
@@ -96,11 +108,15 @@
       if (e.data === 'medtruad:ready') ready();
       else if (e.data === 'medtruad:tabs:1') body.classList.add('tabs');
       else if (e.data === 'medtruad:tabs:0') body.classList.remove('tabs');
+      else if (e.data.indexOf('medtruad:token:') === 0) {
+        var t = e.data.slice(15);
+        lsSet('mt.token', HEX.test(t) ? t : '-');
+      }
     });
     /* แอปรุ่นเก่าที่ไม่ส่งสัญญาณ: ซ่อน splash หลังหน้าโหลด 4 วินาที */
     app.addEventListener('load', function () { setTimeout(ready, 4000); });
     setTimeout(function () { if (!done) showSlow('เปิดช้ากว่าปกติ · เน็ตอาจช้า หรือ Google ยังไม่ตอบ'); }, 20000);
-    app.src = EXEC + '?w=1' + key;
+    app.src = EXEC + '?w=1&o=' + encodeURIComponent(location.origin) + key;
   }
 </script>
 </body>
