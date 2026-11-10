@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!--
-  MedTruad · หน้าห่อบน GitHub Pages (B1)
+  MedTruad · หน้าห่อบน GitHub Pages (B1.3)
   หน้าที่: ชื่อ/ไอคอนบนหน้าจอโฮม · splash ระหว่าง Apps Script โหลด · ส่ง ?k= ต่อให้แอป
   แก้ไฟล์นี้จุดเดียว: ค่า EXEC ด้านล่าง (URL /exec ของ deployment)
 -->
@@ -32,14 +32,21 @@
   #app { position: fixed; left: 0; right: 0; top: var(--sat); bottom: var(--sab); width: 100%; height: calc(100% - var(--sat) - var(--sab)); border: 0; display: block; background: var(--bg); }
   #pad { position: fixed; left: 0; right: 0; bottom: 0; height: var(--sab); background: var(--bg); }
   body.tabs #pad { background: var(--card); }
+  /* B1.3: แอปรุ่นใหม่ตอบ medtruad:fs:1 → iframe เต็มจอ แอปเว้นขอบเองจากค่าที่หน้าห่อวัดให้
+     (ฉากมืดของแผ่นล่างคลุมถึงขอบจอ · ไม่มีแถบสีค้างบน/ล่าง · ไม่มีขอบล่างซ้อนสองชั้น) · แอปรุ่นเก่าไม่ตอบ = ใช้แบบเดิม */
+  body.fs #app { top: 0; bottom: 0; height: 100%; }
+  body.fs #pad { display: none; }
+  #sa { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
   #splash { position: fixed; inset: 0; z-index: 5; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: var(--sat) 24px var(--sab); transition: opacity .28s ease; }
   body.ready #splash { opacity: 0; pointer-events: none; }
   body.gone #splash { display: none; }
-  #splash svg { width: 76px; height: 76px; }
+  #splash svg { width: 76px; height: 76px; animation: pop .45s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes pop { from { opacity: 0; transform: scale(.86); } }
   #splash .dot { transform-origin: 49px 32px; animation: breathe 1.6s ease-in-out infinite; }
   @keyframes breathe { 50% { transform: scale(.8); opacity: .7; } }
-  @media (prefers-reduced-motion: reduce) { #splash .dot { animation: none; } #splash { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { #splash .dot, #splash svg { animation: none; } #splash { transition: none; } }
   .credit { position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 22px); text-align: center; font-size: 12px; color: var(--ink-3); letter-spacing: .01em; }
   .credit b { color: var(--ink-2); font-weight: 600; }
   #slow { margin-top: 26px; max-width: 300px; text-align: center; font-size: 14px; color: var(--ink-2); line-height: 1.55; }
@@ -57,6 +64,7 @@
 </div>
 <iframe id="app" title="MedTruad" allow="clipboard-write; clipboard-read" referrerpolicy="origin"></iframe>
 <div id="pad"></div>
+<div id="sa" aria-hidden="true"></div>
 <script>
   /* ใส่ URL /exec ของ deployment (Deploy → Manage deployments → Web app URL) */
   var EXEC = 'https://script.google.com/macros/s/AKfycbwT2gFpDRCuIJmVMTHbXNWYXEaKOmdHyx8oFDj_S4Bzz9SK9TDlZzYEfsfHZXB183ylWg/exec';
@@ -138,6 +146,8 @@
       dbg(e.data.replace(/^(medtruad:token:)[0-9a-f]{58}/, '$1…'), mine, e.origin);
       if (!mine) return;
       if (e.data === 'medtruad:ready') ready();
+      else if (e.data === 'medtruad:hello') sendSafeArea();
+      else if (e.data === 'medtruad:fs:1') body.classList.add('fs');
       else if (e.data === 'medtruad:tabs:1') body.classList.add('tabs');
       else if (e.data === 'medtruad:tabs:0') body.classList.remove('tabs');
       else if (e.data.indexOf('medtruad:token:') === 0) {
@@ -146,6 +156,28 @@
         dbg('', true);
       }
     });
+    /* B1.3: วัดขอบจอ (safe area) แล้วส่งให้ทุกชั้นใต้ iframe ของเรา · แอปรับเฉพาะข้อความจาก window.top
+       ตัวเลขขอบจอไม่ใช่ข้อมูลส่วนตัว จึงส่งแบบ '*' ได้ (เข้าถึง .frames ข้ามเว็บได้) · หมุนจอ/แถบ Safari ยุบ-ขยาย → ส่งใหม่ */
+    var saBox = document.getElementById('sa'), saLast = '', saAsked = false;
+    function saMsg() {
+      var c = getComputedStyle(saBox);
+      return 'medtruad:sa:' + [c.paddingTop, c.paddingBottom, c.paddingLeft, c.paddingRight].map(function (v) { return Math.round(parseFloat(v) || 0); }).join(',');
+    }
+    function sendDown(w, msg, d) {
+      try { w.postMessage(msg, '*'); } catch (err) { /* ข้าม */ }
+      if (d >= 4) return;
+      var n = 0;
+      try { n = w.frames.length; } catch (err) { n = 0; }
+      for (var i = 0; i < n; i++) { try { sendDown(w.frames[i], msg, d + 1); } catch (err) { /* ข้าม */ } }
+    }
+    function sendSafeArea() {
+      saAsked = true;
+      saLast = saMsg();
+      if (app.contentWindow) sendDown(app.contentWindow, saLast, 0);
+    }
+    function saCheck() { if (saAsked && saMsg() !== saLast) sendSafeArea(); }
+    window.addEventListener('resize', saCheck);
+    window.addEventListener('orientationchange', function () { setTimeout(saCheck, 300); });
     /* แอปรุ่นเก่าที่ไม่ส่งสัญญาณ: ซ่อน splash หลังหน้าโหลด 4 วินาที */
     app.addEventListener('load', function () { setTimeout(ready, 4000); });
     setTimeout(function () { if (!done) showSlow('เปิดช้ากว่าปกติ · เน็ตอาจช้า หรือ Google ยังไม่ตอบ'); }, 20000);
