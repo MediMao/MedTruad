@@ -67,7 +67,8 @@
 <div id="sa" aria-hidden="true"></div>
 <script>
   /* ใส่ URL /exec ของ deployment (Deploy → Manage deployments → Web app URL) */
-  var EXEC = 'https://script.google.com/macros/s/AKfycbwT2gFpDRCuIJmVMTHbXNWYXEaKOmdHyx8oFDj_S4Bzz9SK9TDlZzYEfsfHZXB183ylWg/exec';
+  var EXEC = 'https://script.google.com/macros/s/AKfycbwT2gFpDRCuIJmVMTHbXNWYXEaKOmdHyx8oFDj_S4Bzz9SK9TDlZzYEfsfHZXB183ylWg/exec
+';
 
   var app = document.getElementById('app');
   var slow = document.getElementById('slow');
@@ -145,7 +146,11 @@
       var mine = fromApp(e);
       dbg(e.data.replace(/^(medtruad:token:)[0-9a-f]{58}/, '$1…'), mine, e.origin);
       if (!mine) return;
-      if (e.data === 'medtruad:ready') ready();
+      if (e.data === 'medtruad:ready') {
+        /* SP1: บอกแอปว่าแตะไอคอนถึงหน้าแรกขึ้นใช้กี่ ms (แอปบันทึกเป็น event app_load) */
+        if (!done && window.performance) sendDown(app.contentWindow, 'medtruad:lt:' + Math.min(999999, Math.round(performance.now())), 0);
+        ready();
+      }
       else if (e.data === 'medtruad:hello') sendSafeArea();
       else if (e.data === 'medtruad:fs:1') body.classList.add('fs');
       else if (e.data === 'medtruad:tabs:1') body.classList.add('tabs');
